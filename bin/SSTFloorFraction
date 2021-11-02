@@ -1,0 +1,45 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTFloorFraction
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+set -e
+
+command_name=$(basename "$0")
+
+function view_help() {
+  echo "Overview: Flooring decimal fractions. (Internal use only)"
+  echo "Usage: ${command_name} <the number of digits>"
+  echo "* Input the value via \`stdin\`."
+}
+
+number_of_digits=9
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  view_help
+  exit 0
+elif [[ "$1" =~ "^[0-9]+$" ]]; then
+  number_of_digits=$(( 0 + $1 ))
+else
+  view_help
+  exit 1
+fi
+
+read decimal_string
+
+if [[ "$decimal_string" =~ "^[0-9]+$" ]]; then
+  echo $decimal_string
+  exit 0
+elif [[ "$decimal_string" =~ "^[0-9]+\.[0-9]+$" ]]; then
+  int_string=${decimal_string%.*}
+  fraction_string=${decimal_string#*.}
+  echo $int_string.${fraction_string[1,$number_of_digits]}
+  exit 0
+else
+  echo "Invalid decimal fraction." 1>&2
+  exit 1
+fi

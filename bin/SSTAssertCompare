@@ -1,0 +1,388 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTAssertCompare
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+set -u
+
+default_command_name="SSTAssertCompare"
+command_name=$(basename "$0") # This may be different from SSTAssertCompare. e.g.) SSTAssertStringEqual
+
+local -A parsed_arguments
+zparseopts -D -E -M -A parsed_arguments -- \
+  m: -mode:=m \
+  t: -type:=t \
+  l: -line:=l
+
+lhs=""
+rhs=""
+failure_message=""
+line=0
+
+comparison_mode=""
+greater_than_mode="gt"
+greater_than_or_equal_mode="ge"
+equal_mode="eq"
+not_equal_mode="ne"
+less_than_mode="lt"
+less_than_or_equal_mode="le"
+
+comparison_type=""
+float_type="float"
+integer_type="integer"
+string_type="string"
+inference_type="auto"
+
+if [[ -n "${parsed_arguments[(i)-l]}" && "${parsed_arguments[-l]}" =~ "^[0-9]+$"  ]]; then
+  line=$(( 0 + ${parsed_arguments[-l]} ))
+fi
+
+function fatal_error() {
+  SSTFail -c "$command_name" -l $line --fatal-error "$1"
+  exit 1;
+}
+
+if [[ "$command_name" != "$default_command_name" ]]; then
+  if [[ -n "${parsed_arguments[(i)-m]}" ]]; then
+    fatal_error "Extra argument: -m/--mode"
+  fi
+  if [[ -n "${parsed_arguments[(i)-t]}" ]]; then
+    fatal_error "Extra argument: -t/--type"
+  fi
+fi
+
+case "$command_name" in
+  SSTAssertEqual)
+    comparison_mode="$equal_mode"
+    comparison_type="$inference_type"
+    ;;
+  SSTAssertGreaterThan)
+    comparison_mode="$greater_than_mode"
+    comparison_type="$inference_type"
+    ;;
+  SSTAssertGreaterThanOrEqual)
+    comparison_mode="$greater_than_or_equal_mode"
+    comparison_type="$inference_type"
+    ;;
+  SSTAssertLessThan)
+    comparison_mode="$less_than_mode"
+    comparison_type="$inference_type"
+    ;;
+  SSTAssertLessThanOrEqual)
+    comparison_mode="$less_than_or_equal_mode"
+    comparison_type="$inference_type"
+    ;;
+  SSTAssertNotEqual)
+    comparison_mode="$not_equal_mode"
+    comparison_type="$inference_type"
+    ;;
+  SSTAssertFloatEqual)
+    comparison_mode="$equal_mode"
+    comparison_type="$float_type"
+    ;;
+  SSTAssertFloatGreaterThan)
+    comparison_mode="$greater_than_mode"
+    comparison_type="$float_type"
+    ;;
+  SSTAssertFloatGreaterThanOrEqual)
+    comparison_mode="$greater_than_or_equal_mode"
+    comparison_type="$float_type"
+    ;;
+  SSTAssertFloatLessThan)
+    comparison_mode="$less_than_mode"
+    comparison_type="$float_type"
+    ;;
+  SSTAssertFloatLessThanOrEqual)
+    comparison_mode="$less_than_or_equal_mode"
+    comparison_type="$float_type"
+    ;;
+  SSTAssertFloatNotEqual)
+    comparison_mode="$not_equal_mode"
+    comparison_type="$float_type"
+    ;;
+  SSTAssertIntegerEqual)
+    comparison_mode="$equal_mode"
+    comparison_type="$integer_type"
+    ;;
+  SSTAssertIntegerGreaterThan)
+    comparison_mode="$greater_than_mode"
+    comparison_type="$integer_type"
+    ;;
+  SSTAssertIntegerGreaterThanOrEqual)
+    comparison_mode="$greater_than_or_equal_mode"
+    comparison_type="$integer_type"
+    ;;
+  SSTAssertIntegerLessThan)
+    comparison_mode="$less_than_mode"
+    comparison_type="$integer_type"
+    ;;
+  SSTAssertIntegerLessThanOrEqual)
+    comparison_mode="$less_than_or_equal_mode"
+    comparison_type="$integer_type"
+    ;;
+  SSTAssertIntegerNotEqual)
+    comparison_mode="$not_equal_mode"
+    comparison_type="$integer_type"
+    ;;
+  SSTAssertStringEqual)
+    comparison_mode="$equal_mode"
+    comparison_type="$string_type"
+    ;;
+  SSTAssertStringGreaterThan)
+    comparison_mode="$greater_than_mode"
+    comparison_type="$string_type"
+    ;;
+  SSTAssertStringGreaterThanOrEqual)
+    comparison_mode="$greater_than_or_equal_mode"
+    comparison_type="$string_type"
+    ;;
+  SSTAssertStringLessThan)
+    comparison_mode="$less_than_mode"
+    comparison_type="$string_type"
+    ;;
+  SSTAssertStringLessThanOrEqual)
+    comparison_mode="$less_than_or_equal_mode"
+    comparison_type="$string_type"
+    ;;
+  SSTAssertStringNotEqual)
+    comparison_mode="$not_equal_mode"
+    comparison_type="$string_type"
+    ;;
+  $default_command_name)
+    if [[ -n "${parsed_arguments[(i)-m]}" ]]; then
+      given_mode="${parsed_arguments[-m]}"
+      case "$given_mode" in
+        g[te] | eq | ne | l[te]) 
+          comparison_mode="$given_mode"
+          ;;
+        *) 
+          fatal_error "Unexpected mode: \"$given_mode\""
+          ;;
+      esac
+    else
+      fatal_error "Missing comparison mode"
+    fi
+    if [[ -n "${parsed_arguments[(i)-t]}" ]]; then
+      given_type="${parsed_arguments[-t]}"
+      case "$given_type" in
+        $float_type | $integer_type | $string_type | $inference_type)
+          comparison_type="$given_type"
+          ;;
+        f)
+          comparison_type="$float_type"
+          ;;
+        i | int)
+          comparison_type="$integer_type"
+          ;;
+        s | str)
+          comparison_type="$string_type"
+          ;;
+        infer | inference)
+          comparison_type="$inference_type"
+          ;;
+        *) 
+          fatal_error "Unexpected mode: \"$given_type\""
+          ;;
+      esac
+    else
+      fatal_error "Missing comparison type"
+    fi
+    ;;
+  *)
+    fatal_error "Unexpected command name: \"$command_name\""
+    ;;
+esac
+
+if [[ $# -lt 2 ]]; then
+  fatal_error "Missing a right-hand side argument" 
+elif [[ $# -eq 2 ]]; then
+  lhs="$1"
+  rhs="$2"
+  unset failure_message
+elif [[ $# -eq 3 ]]; then
+  lhs="$1"
+  rhs="$2"
+  failure_message="$3"
+else
+  fatal_error "${command_name}: Too many arguments"
+fi
+
+
+function is_float() {
+  if [[ "$1" =~ "^[-+]?[0-9_]+(\.[0-9]*)?([Ee][-+]?[0-9]+)?$" ]]; then  
+    return 0
+  fi
+  return 1
+}
+
+function is_integer() {
+  if [[ "$1" =~ "^[-+]?[0-9_]+$" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+if [[ "$comparison_type" == "$float_type" ]]; then
+  if ! is_float "$lhs"; then
+    fatal_error "\"$lhs\" on the left-hand side is not a floating point number"
+  fi
+  if ! is_float "$rhs"; then
+    fatal_error "\"$rhs\"  on the right-hand side is not a floating point number"
+  fi
+elif [[ "$comparison_type" == "$integer_type" ]]; then
+  if ! is_integer "$lhs"; then
+    fatal_error "\"$lhs\" on the left-hand side is not an integer"
+  fi
+  if ! is_integer "$rhs"; then
+    fatal_error "\"$rhs\" on the right-hand side is not an integer"
+  fi
+elif [[ "$comparison_type" == "$inference_type" ]]; then
+  if is_integer "$lhs" && is_integer "$rhs"; then
+    comparison_type="$integer_type"
+  elif is_float "$lhs" && is_float "$rhs"; then
+    comparison_type="$float_type"
+  else
+    comparison_type="$string_type"
+  fi
+fi
+
+ordered_descending=1
+ordered_same=0
+ordered_ascending=-1
+
+function compare_number() {
+  if [[ $1 -eq $2 ]]; then
+    echo $ordered_same
+  elif [[ $1 -gt $2 ]]; then
+    echo $ordered_descending
+  else
+    echo $ordered_ascending
+  fi
+}
+
+function compare_string() {
+  if [[ "$1" == "$2" ]]; then
+    echo $ordered_same
+  elif [[ "$1" > "$2" ]]; then
+    echo $ordered_descending
+  else
+    echo $ordered_ascending
+  fi
+}
+
+function unexpected_error() {
+  printf '\033[7;31mUnexpected error: %s\033[m\n' "$1" 1>&2
+  exit 2
+}
+
+function failed() {
+  local message="$1"
+  if [[ -v failure_message ]]; then
+    message="${message}: $failure_message"
+  fi
+  SSTFail -c "$command_name" -l $line "$message"
+  exit 1
+}
+
+comparison_result=-999
+case "$comparison_type" in 
+  $float_type | $integer_type) 
+    comparison_result=$(compare_number "$lhs" "$rhs")
+    ;;
+  $string_type)
+    comparison_result=$(compare_string "$lhs" "$rhs")
+esac
+if [[ \
+  $comparison_result -ne $ordered_descending && \
+  $comparison_result -ne $ordered_same && \
+  $comparison_result -ne $ordered_ascending \
+]]; then
+  unexpected_error "Unexpected Comparison Result."
+fi
+
+case "$comparison_mode" in
+  $equal_mode)
+    if [[ $comparison_result -eq $ordered_same ]]; then
+      exit 0
+    fi
+    case "$comparison_type" in
+      $float_type | $integer_type)
+        failed "$lhs is not equal to $rhs"
+        ;;
+      *)
+        failed "\"$lhs\" is not equal to \"$rhs\""
+        ;;
+    esac
+    ;;
+  $greater_than_mode)
+    if [[ $comparison_result -eq $ordered_descending ]]; then
+      exit 0
+    fi
+    case "$comparison_type" in
+      $float_type | $integer_type)
+        failed "$lhs is not greater than $rhs"
+        ;;
+      *)
+        failed "\"$lhs\" is not greater than \"$rhs\""
+        ;;
+    esac
+    ;;
+  $greater_than_or_equal_mode)
+    if [[ $comparison_result -ne $ordered_ascending ]]; then
+      exit 0
+    fi
+    case "$comparison_type" in
+      $float_type | $integer_type)
+        failed "$lhs is less than $rhs"
+        ;;
+      *)
+        failed "\"$lhs\" is less than \"$rhs\""
+        ;;
+    esac
+    ;;
+  $less_than_mode)
+    if [[ $comparison_result -eq $ordered_ascending ]]; then
+      exit 0
+    fi
+    case "$comparison_type" in
+      $float_type | $integer_type)
+        failed "$lhs is not less than $rhs"
+        ;;
+      *)
+        failed "\"$lhs\" is not less than \"$rhs\""
+        ;;
+    esac
+    ;;
+  $less_than_or_equal_mode)
+    if [[ $comparison_result -ne $ordered_descending ]]; then
+      exit 0
+    fi
+    case "$comparison_type" in
+      $float_type | $integer_type)
+        failed "$lhs is greater than $rhs"
+        ;;
+      *)
+        failed "\"$lhs\" is greater than \"$rhs\""
+        ;;
+    esac
+    ;;
+  $not_equal_mode)
+    if [[ $comparison_result -ne $ordered_same ]]; then
+      exit 0
+    fi
+    case "$comparison_type" in
+      $float_type | $integer_type)
+        failed "$lhs is equal to $rhs"
+        ;;
+      *)
+        failed "\"$lhs\" is equal to \"$rhs\""
+        ;;
+    esac
+    ;;
+esac
+
+unexpected_error "Unreachable."

@@ -1,0 +1,10 @@
+#!/usr/bin/env zsh
+
+SSTAssertStringEqual "" "" "Compare Empty Strings" -l ${(%):-%I}
+SSTAssertStringGreaterThan "Z" "A" -l ${(%):-%I}
+SSTAssertStringGreaterThanOrEqual "Z" "A" -l ${(%):-%I}
+SSTAssertStringGreaterThanOrEqual "Z" "Z" -l ${(%):-%I}
+SSTAssertStringLessThan "A" "Z" -l ${(%):-%I}
+SSTAssertStringLessThanOrEqual "A" "Z" -l ${(%):-%I}
+SSTAssertStringLessThanOrEqual "Z" "Z" -l ${(%):-%I}
+SSTAssertStringNotEqual "A" "a" -l ${(%):-%I}

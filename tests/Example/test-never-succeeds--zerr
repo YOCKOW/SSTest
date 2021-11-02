@@ -1,0 +1,6 @@
+#!/usr/bin/env zsh
+
+foobarbaz-hogefugapiyo--command-not-found
+result=$(( 1 / 0 ))
+
+return 0

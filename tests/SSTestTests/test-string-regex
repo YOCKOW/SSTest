@@ -1,0 +1,7 @@
+#!/usr/bin/env zsh
+
+SSTAssertMatch "" "^$" -l ${(%):-%I}
+SSTAssertMatch "aabbbccc" "^a+b+c+$" -l ${(%):-%I}
+
+SSTAssertNotMatch "" ".+" -l ${(%):-%I}
+SSTAssertNotMatch "aabbbccc" "a{3,}" -l ${(%):-%I}

@@ -1,0 +1,117 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTFail
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+function fatal_error() {
+  printf "\033[1;31mfatal error\033[m: %s\n" "$1" 1>&2
+  exit 1
+}
+
+local -A parsed_arguments
+zparseopts -D -E -M -A parsed_arguments -- \
+  v -verbose=v \
+  f -fatal-error=f \
+  c: -assertion-command:=c  \
+  l: -line:=l
+
+failure_message="SSTest Failure."
+if [[ $# -eq 1 ]]; then
+  failure_message="$1"
+elif [[ $# -gt 1 ]]; then
+  fatal_error "SSTFail: Too many arguments."
+fi
+
+verbose=false
+if [[ -n "${parsed_arguments[(i)-v]}" || "${SST_VERBOSE_MODE:-}" =~ "^(on|true)$" ]]; then
+  verbose=true
+fi
+
+is_fatal_error=false
+if [[ -n "${parsed_arguments[(i)-f]}" ]]; then
+  is_fatal_error=true
+fi
+
+assertion_command_name="SSTFail"
+if [[ -n "${parsed_arguments[(i)-c]}" ]]; then
+  assertion_command_name="${parsed_arguments[-c]}"
+fi
+
+line=0
+if  [[ -n "${parsed_arguments[(i)-l]}" && "${parsed_arguments[-l]}" =~ "^[0-9]+$" ]]; then
+  line=$(( 0 + ${parsed_arguments[-l]} ))
+fi
+
+function print_verbose() {
+  if [[ "$verbose" == "true" ]]; then
+    printf "\033[2m%s\033[m\n" "$1"
+  fi
+}
+
+function ppid_search() {
+  function runner_not_found() {
+    fatal_error "SSTest runner is not found. \`SSTFail\` or \`SSTAssert*\` must be called within test cases."
+  }
+
+  local pid=$(( 0 + $1 ))
+  local ppid_string=$(ps -o ppid= -p $pid)
+  local ppid=$(( 0 + ${ppid_string:-0} ))
+  if [[ -z "$ppid" || $ppid -le 1 ]]; then
+    print_verbose "Parent PID of $pid is not found or is the root process."
+    runner_not_found
+  fi
+
+  local process=$(ps -o command= -p $ppid)
+  if [[ -z "$process" ]]; then
+    runner_not_found
+  fi
+
+  if [[ "$process" =~ '^([[:alnum:][:blank:][:punct:]]+/)?zsh[[:blank:]]+(/.*/SSTRunTestSuite)[[:blank:]]' ]]; then
+    if [[ -f "${match[2]}" ]]; then
+      echo $ppid
+      return 0
+    fi
+  fi  
+
+  ppid_search $ppid
+}
+print_verbose "Search PID for \`SSTRunTestSuite\`."
+runner_pid=$(ppid_search $$)
+print_verbose "Found PID of \`SSTRunTestSuite\` is $runner_pid."
+
+temporary_directory="$(dirname $(mktemp -u))/jp.YOCKOW.SSTRunTestSuite/$runner_pid"
+current_test_case_failures_file="${temporary_directory}/current-test-case-failures"
+current_test_case_path_file="${temporary_directory}/current-test-case-path"
+
+if [[ ! -d "$temporary_directory" ]]; then
+  fatal_error "Temporary directory for the current runner is not found."
+fi
+if [[ ! -f "$current_test_case_failures_file" ]]; then
+  fatal_error "Log file for the current test case is not found."
+fi
+if [[ ! -f "$current_test_case_path_file" ]]; then
+  fatal_error "The path to the current test case is not found."
+fi
+
+test_case_path=$(cat "$current_test_case_path_file")
+if [[ -z "$test_case_path" ]]; then
+  test_case_path="Unknown"
+fi
+
+test_suite_name=$(basename "$(dirname "$test_case_path")")
+test_case_name=$(basename "$test_case_path")
+
+full_message="${test_case_path}:${line}: error: - [${test_suite_name} ${test_case_name}] : ${assertion_command_name}"
+if [[ "$is_fatal_error" == "true" ]]; then
+  full_message="$full_message $(printf "\033[1;31mfatal error\033[m: $failure_message")"
+else
+  full_message="$full_message $(printf "\033[1;35mfailed\033[m: ${failure_message}")"
+fi
+echo "$full_message" >> "$current_test_case_failures_file"
+printf "%s\n" "$full_message" 1>&2
+
+exit 1

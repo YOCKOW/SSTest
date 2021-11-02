@@ -1,0 +1,3 @@
+#!/usr/bin/env zsh
+
+echo "\`Example.tear-down\` called."

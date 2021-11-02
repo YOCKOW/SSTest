@@ -1,0 +1,16 @@
+#!/usr/bin/env zsh
+
+SSTAssertIntegerEqual 0 0 -l ${(%):-%I}
+SSTAssertIntegerEqual -1000 -1000 -l ${(%):-%I}
+SSTAssertIntegerEqual +1000 +1000 -l ${(%):-%I}
+SSTAssertIntegerEqual -1_234 -1234 -l ${(%):-%I}
+
+SSTAssertIntegerGreaterThan 2 1 -l ${(%):-%I}
+SSTAssertIntegerGreaterThanOrEqual 2 1 -l ${(%):-%I}
+SSTAssertIntegerGreaterThanOrEqual 2 2 -l ${(%):-%I}
+
+SSTAssertIntegerLessThan 1 2 -l ${(%):-%I}
+SSTAssertIntegerLessThanOrEqual 1 2 -l ${(%):-%I}
+SSTAssertIntegerLessThanOrEqual 2 2 -l ${(%):-%I}
+
+SSTAssertIntegerNotEqual $(( 1 + 1 )) $(( 1 + 2 )) -l ${(%):-%I}

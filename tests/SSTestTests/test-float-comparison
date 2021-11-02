@@ -1,0 +1,17 @@
+#!/usr/bin/env zsh
+
+SSTAssertFloatEqual 0 0 -l ${(%):-%I}
+SSTAssertFloatEqual -1.0 -1.0 -l ${(%):-%I}
+SSTAssertFloatEqual +1.0 1.0 -l ${(%):-%I}
+SSTAssertFloatEqual -1.23e3 -1230.0 -l ${(%):-%I}
+SSTAssertFloatEqual +1.23e-3 0.00123 -l ${(%):-%I}
+
+SSTAssertFloatGreaterThan +0.123e4 +1.22e3 -l ${(%):-%I}
+SSTAssertFloatGreaterThanOrEqual +0.123e4 +1.22e3 -l ${(%):-%I}
+SSTAssertFloatGreaterThanOrEqual +0.123e4 +1.23e3 -l ${(%):-%I}
+
+SSTAssertFloatLessThan -0.123e4 +1.22e3 -l ${(%):-%I}
+SSTAssertFloatLessThanOrEqual -0.123e4 +1.23e3 -l ${(%):-%I}
+SSTAssertFloatLessThanOrEqual +0.123e4 +1.23e3 -l ${(%):-%I}
+
+SSTAssertFloatNotEqual 1.0 0.99 -l ${(%):-%I}

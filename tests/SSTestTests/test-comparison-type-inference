@@ -1,0 +1,23 @@
+#!/usr/bin/env zsh
+
+SSTAssertEqual 1.0 1 -l ${(%):-%I} # float
+SSTAssertEqual 2 2.0 -l ${(%):-%I} # float
+SSTAssertEqual "+1.23e-3" "0.00123" -l ${(%):-%I} # inferred as float
+SSTAssertEqual +3 3 -l ${(%):-%I} # int
+SSTAssertEqual "0" "00" -l ${(%):-%I} # inferred as int
+SSTAssertEqual "string" string -l ${(%):-%I} # string
+
+SSTAssertGreaterThan "ABC" "A12" -l ${(%):-%I}
+SSTAssertGreaterThan "2" "1" -l ${(%):-%I}
+
+SSTAssertGreaterThanOrEqual 100 10 -l ${(%):-%I}
+SSTAssertGreaterThanOrEqual 100 100 -l ${(%):-%I}
+
+SSTAssertLessThan "A12" "ABC" -l ${(%):-%I}
+SSTAssertLessThan 0 1 -l ${(%):-%I}
+
+SSTAssertLessThanOrEqual 10 100 -l ${(%):-%I}
+SSTAssertLessThanOrEqual 100 100 -l ${(%):-%I}
+
+SSTAssertNotEqual 1.0 1.1 -l ${(%):-%I}
+SSTAssertNotEqual "string" other -l ${(%):-%I}
