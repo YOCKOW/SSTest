@@ -11,6 +11,9 @@ build:
 clean:
 	rm -v "$(repository_dir)/bin/SSTTime"
 
+view-version:
+	@env PATH="$(repository_dir)/bin:$$PATH" SSTest --version
+
 run-example: build
 	env PATH="$(repository_dir)/bin:$$PATH" SSTRunTestSuite "$(repository_dir)/tests/Example"
 

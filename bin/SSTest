@@ -26,8 +26,15 @@ function view_help() {
   echo ""
 }
 
+function view_version() {
+  SSTest-version
+}
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   view_help
+  exit 0
+elif [[ "${1:-}" == "--version" ]]; then
+  view_version
   exit 0
 fi
 
