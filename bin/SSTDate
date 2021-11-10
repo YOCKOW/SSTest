@@ -1,0 +1,58 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTDate
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+set -e
+
+command_name=$(basename "$0")
+
+function view_help() {
+  echo "Overview: View the ISO8601 formatted date. (Internal use only)"
+  echo "Usage: ${command_name} [UNIX time]"
+}
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  view_help
+  exit 0
+fi
+
+timespec_string=""
+
+if [[ -z "$1" ]]; then
+  timespec_string=$(SSTTime --calendar | SSTFloorFraction ${SST_FRACTION_DIGITS:-3})
+elif [[ "$1" =~ '^[0-9]+$' ]]; then
+  timespec_string="$1.0"
+elif [[ "$1" =~ '^[0-9]+\.[0-9]+$' ]]; then
+  timespec_string="$1"
+else
+  echo "${command_name}: Invalid time." 1>&2
+  exit 1
+fi
+
+seconds_string=${timespec_string%.*}
+nanoseconds_string=${timespec_string#*.}
+
+unix_name=$(uname -s)
+date_unix_time_args=""
+if [[ "$unix_name" == "Darwin" ]]; then
+  date_unix_time_args="-r ${seconds_string}"
+elif [[ "$unix_name" == "Linux" ]]; then
+  date_unix_time_args="-d @${seconds_string}"
+else
+  echo "Unsupported OS." 1>&2
+  exit 1
+fi
+
+date_format=""
+if [[ 0 -eq $(( 0 + $nanoseconds_string )) ]]; then
+  date_format="%Y-%m-%dT%H:%M:%S%z"
+else
+  date_format="%Y-%m-%dT%H:%M:%S.${nanoseconds_string}%z"
+fi
+
+echo $(date ${date_unix_time_args} +"${date_format}")

@@ -1,0 +1,41 @@
+name: CI
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - '**'
+    paths:
+      - 'bin/**'
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/*.yml'
+  pull_request:
+    paths:
+      - 'bin/**'
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/*.yml'
+jobs:
+  test:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install zsh
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt update
+        sudo apt install zsh
+    - name: Run Tests
+      run: make test
+    - name: Run Tests that will never succeed
+      run: "! make run-failing-tests"
+    - name: Install SSTest
+      run: sudo make install
+    - name: Run Tests again
+      run: which SSTest && SSTest ./tests --filter SSTestTests/

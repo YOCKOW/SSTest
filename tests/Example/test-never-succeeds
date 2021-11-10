@@ -1,0 +1,34 @@
+#!/usr/bin/env zsh
+
+SSTFail "This test must fail always!" -l ${(%):-%I}
+
+SSTAssertStringEqual "LHS" -l ${(%):-%I} # Mising RHS!
+SSTAssertStringEqual "LHS" "RHS" -l ${(%):-%I} # Not equal
+SSTAssertStringEqual "LHS" "RHS" "They are never equal to each other." -l ${(%):-%I} # With message
+SSTAssertStringGreaterThan "A" "A" -l ${(%):-%I} # LHS is not greater than RHS
+SSTAssertStringGreaterThanOrEqual "A" "Z" -l ${(%):-%I} # LHS is not greater than RHS
+SSTAssertStringLessThan "A" "A" -l ${(%):-%I} # LHS is not less than RHS
+SSTAssertStringLessThanOrEqual "Z" "A" -l ${(%):-%I} # LHS is not less than RHS
+
+SSTAssertStringMatch "abc" "def" -l ${(%):-%I} 
+SSTAssertStringNotMatch "abc" "b" -l ${(%):-%I} 
+
+SSTAssertIntegerEqual 1 -l ${(%):-%I} # Mising RHS!
+SSTAssertIntegerEqual 1 2 -l ${(%):-%I} # Not equal
+SSTAssertIntegerEqual 1 2 "They are never equal to each other." -l ${(%):-%I} # With message
+SSTAssertIntegerEqual foo 2 -l ${(%):-%I} # LHS is not an integer.
+SSTAssertIntegerEqual 1 bar -l ${(%):-%I} # RHS is not an integer.
+SSTAssertIntegerGreaterThan 1 1 -l ${(%):-%I} # LHS is not greater than RHS
+SSTAssertIntegerGreaterThanOrEqual 1 2 -l ${(%):-%I} # LHS is not greater than RHS
+SSTAssertIntegerLessThan 1 1 -l ${(%):-%I} # LHS is not less than RHS
+SSTAssertIntegerLessThanOrEqual 1 0 -l ${(%):-%I} # LHS is not less than RHS
+
+SSTAssertFloatEqual 1.2e1 1.2e2 -l ${(%):-%I} # Not equal
+SSTAssertFloatEqual 1.2foo 2 -l ${(%):-%I} # LHS is not a floating point number.
+SSTAssertFloatEqual 1 2.3bar -l ${(%):-%I} # RHS is not a floating point number.
+SSTAssertFloatGreaterThan 1e1 1e1 -l ${(%):-%I} # LHS is not greater than RHS
+SSTAssertFloatGreaterThanOrEqual 1e1 1e2 -l ${(%):-%I} # LHS is not greater than RHS
+SSTAssertFloatLessThan 1e1 1e1 -l ${(%):-%I} # LHS is not less than RHS
+SSTAssertFloatLessThanOrEqual 1e2 1e1 -l ${(%):-%I} # LHS is not less than RHS
+
+return 0

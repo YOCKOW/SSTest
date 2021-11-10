@@ -1,0 +1,198 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTest
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+set -eu
+
+command_name=$(basename "$0")
+
+function view_help() {
+  echo "Overview: Run Multiple Test Suites."
+  echo ""
+  echo "Usage: ${command_name} <Path to directory containing test suites> [Options]"
+  echo ""
+  echo "Options:"
+  echo "  --help/-h      View this message."
+  echo "  --filter <filter>"
+  echo "                 Only execute the specified test cases with the given "
+  echo "                 regular expression."
+  echo "                 Format: <test suite>/<test case>"
+  echo "  --skip <skip>  Skip the specified test cases (regex)."
+  echo ""
+}
+
+function view_version() {
+  SSTest-version
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  view_help
+  exit 0
+elif [[ "${1:-}" == "--version" ]]; then
+  view_version
+  exit 0
+fi
+
+function view_error() {
+  local message="$1"
+  echo "$command_name: $message" 1>&2
+  exit 1
+}
+
+verbose=false
+suite_filter=""
+case_filter=""
+suite_skip=""
+case_skip=""
+suites_containing_directory=""
+
+function set_filter() {
+  if [[ "$1" =~ "/" ]]; then
+    suite_filter="${1%%/*}"
+    case_filter="${1#*/}"
+    if [[ -z "$suite_filter" ]]; then
+      suite_filter=".*"
+    fi
+  else
+    suite_filter="$1"
+  fi
+}
+
+function set_skip() {
+  if [[ "$1" =~ "/" ]]; then
+    suite_skip="${1%%/*}"
+    case_skip="${1#*/}"
+    if [[ -z "$suite_skip" ]]; then
+      suite_skip=".*"
+    fi
+  else
+    suite_skip="$1"
+  fi
+}
+
+local -A parsed_arguments
+zparseopts -D -E -M -A parsed_arguments -- \
+  v -verbose=v \
+  -filter: \
+  -skip: 
+
+if [[ $# -lt 1 ]]; then
+  view_error "Missing the directory containing test suites."
+elif [[ $# -gt 2 ]]; then
+  view_error "Too many arguments."
+else
+  suites_containing_directory="$1"
+fi
+
+if [[ -n "${parsed_arguments[(i)-v]}" || "${SST_VERBOSE_MODE:-}" =~ "^(on|true)$" ]]; then
+  verbose=true
+fi
+
+if [[ -n "${parsed_arguments[(i)--filter]}" ]]; then
+  set_filter "${parsed_arguments[--filter]}"
+fi
+
+if [[ -n "${parsed_arguments[(i)--skip]}" ]]; then
+  set_skip "${parsed_arguments[--skip]}"
+fi
+
+if [[ ! -d "$suites_containing_directory" ]]; then
+  view_error "No such directory: $suites_containing_directory"
+fi 
+
+suites_containing_directory=$(cd "$suites_containing_directory" && pwd)
+
+function print_verbose() {
+  if [[ "$verbose" == "true" ]]; then
+    printf "\033[2m%s\033[m\n" "$1" 1>&2
+  fi
+}
+
+print_verbose "Verbose mode: on"
+print_verbose "The directory containing Test Suites: '${suites_containing_directory}'"
+if [[ -n "$suite_filter" ]]; then
+  print_verbose "Test Suite Filter: ${suite_filter}"
+fi
+if [[ -n "$case_filter" ]]; then
+  print_verbose "Test Case Filter: ${case_filter}"
+fi
+if [[ -n "$suite_skip" ]]; then
+  print_verbose "Test Suite Skip: ${suite_skip}"
+fi
+if [[ -n "$case_skip" ]]; then
+  print_verbose "Test Case Skip: ${case_skip}"
+fi
+
+temporary_directory=$(mktemp -d)
+print_verbose "The temporary directory was created at '$temporary_directory'."
+
+function emphasized_print() {
+  printf "\033[1;7m%s\033[m\n" "$1"
+}
+
+number_of_tests=0
+number_of_failures=0
+
+start_time=$(SSTTime)
+emphasized_print "Test Suite Sequence under \"${suites_containing_directory}\" started at $(SSTDate)" 1>&2
+
+for suite_directory in "$suites_containing_directory"/*; do
+  if [[ ! -d "$suite_directory" ]]; then
+    print_verbose "Skip $(basename "$suite_directory") because it is not a directory."
+    continue
+  fi
+
+  suite_name=$(basename "$suite_directory")
+  
+  if [[ -n "$suite_filter" && ! "$suite_name" =~ "$suite_filter" && -z "$case_filter" ]]; then
+    print_verbose "Skip ${suite_name} due to the filter."
+    continue
+  fi
+  if [[ -n "$suite_skip" && "$suite_name" =~ "$suite_skip" && -z "$case_skip" ]]; then
+    print_verbose "Skip ${suite_name} due to the skip condition."
+    continue
+  fi
+
+  runner_options="--SSTest-temporary-directory \"${temporary_directory}\""
+  if [[ "$verbose" == "true" ]]; then
+    runner_options="${runner_options} --verbose"
+  fi
+  if [[ -n "$case_filter" && "$suite_name" =~ "$suite_filter" ]]; then
+    runner_options="${runner_options} --filter \"$case_filter\""
+  fi
+  if [[ -n "$case_skip" && "$suite_name" =~ "$suite_skip" ]]; then
+    runner_options="${runner_options} --skip \"$case_skip\""
+  fi
+  print_verbose "Options for \`SSTRunTestSuite\` is '$runner_options'."
+
+  set +e
+  SSTRunTestSuite "$suite_directory" ${(Q)${(z)runner_options}}
+  set -e
+
+  number_of_tests=$(( $number_of_tests + $(cat "${temporary_directory}/${suite_name}/n-tests") ))
+  number_of_failures=$(( $number_of_failures + $(cat "${temporary_directory}/${suite_name}/n-failures") ))
+done
+
+elapsed_time=$(SSTTime --since $start_time | SSTFloorFraction ${SST_FRACTION_DIGITS:-6})
+
+if [[ $number_of_failures -eq 0 ]]; then
+  emphasized_print "Test Suite Sequence under \"${suites_containing_directory}\" passed at $(SSTDate)" 1>&2
+else
+  emphasized_print "Test Suite Sequence under \"${suites_containing_directory}\" failed at $(SSTDate)" 1>&2
+fi
+
+printf "\033[3m\t Executed ${number_of_tests} tests, with ${number_of_failures} failures in ${elapsed_time} seconds.\033[m\n" 1>&2
+
+rm -rf "$temporary_directory"
+print_verbose "Temporary directory was removed."
+
+if [[ $number_of_failures -eq 0 ]]; then
+  exit 0
+else
+  exit 1
+fi

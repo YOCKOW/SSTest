@@ -1,0 +1,73 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTAssertStringMatch
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+set -u
+
+command_name=$(basename "$0")
+
+local -A parsed_arguments
+zparseopts -D -E -M -A parsed_arguments -- \
+  l: -line:=l
+
+string=""
+regex=""
+failure_message=""
+line=0
+
+if [[ -n "${parsed_arguments[(i)-l]}" && "${parsed_arguments[-l]}" =~ "^[0-9]+$"  ]]; then
+  line=$(( 0 + ${parsed_arguments[-l]} ))
+fi
+
+function fatal_error() {
+  SSTFail -c "$command_name" -l $line --fatal-error "$1"
+  exit 1;
+}
+
+if [[ $# -lt 2 ]]; then
+  fatal_error "Missing a regular expression" 
+elif [[ $# -eq 2 ]]; then
+  string="$1"
+  regex="$2"
+  unset failure_message
+elif [[ $# -eq 3 ]]; then
+  string="$1"
+  regex="$2"
+  failure_message="$3"
+else
+  fatal_error "${command_name}: Too many arguments"
+fi
+
+function failed() {
+  local message="$1"
+  if [[ -v failure_message ]]; then
+    message="${message}: $failure_message"
+  fi
+  SSTFail -c "$command_name" -l $line "$message"
+  exit 1
+}
+
+case "$command_name" in
+  SSTAssertStringMatch | SSTAssertMatch)
+    if [[ "$string" =~ "$regex" ]]; then
+      exit 0
+    fi
+    failed "\"$string\" does not match the expression \"$regex\""
+    ;;
+  SSTAssertStringNotMatch | SSTAssertNotMatch)
+    if [[ ! "$string" =~ "$regex" ]]; then
+      exit 0
+    fi
+    failed "\"$string\" matches the expression \"$regex\""
+    ;;
+  *)
+    fatal_error "Unexpected Command Name"
+    ;;
+esac
+
+exit 1

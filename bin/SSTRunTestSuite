@@ -1,0 +1,310 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTRunTestSuite
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+set -u
+
+# Make it possible to be found by `SSTFail`.
+command_path="$0"
+shell_name=$(basename "$(ps -o comm= -p $$)")
+if [[ "$shell_name" != "zsh" ]]; then
+  echo "Use \`zsh\` to execute this script." 1>&2
+  exit 1
+fi
+if [[ "${command_path:0:1}" != "/" ]]; then
+  exec "$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" "$@"
+fi
+
+command_name=$(basename "$command_path")
+
+function view_help() {
+  echo "Overview: Run Test Suite."
+  echo ""
+  echo "Usage: ${command_name} <Path to test suite directory> [Options]"
+  echo ""
+  echo "Options:"
+  echo "  --help/-h      View this message."
+  echo "  --verbose/-v   Verbose mode."
+  echo "  --filter <filter>"
+  echo "                 Only execute the specified test cases with the given "
+  echo "                 name (regex)."
+  echo "  --skip <skip>  Skip the specified test cases (regex)."
+  echo ""
+}
+
+function view_version() {
+  SSTest-version
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  view_help
+  exit 0
+elif [[ "${1:-}" == "--version" ]]; then
+  view_version
+  exit 0
+fi
+
+function view_error() {
+  local message="$1"
+  echo "$command_name: $message" 1>&2
+  exit 1
+}
+
+verbose=false
+filter=""
+skip=""
+SSTest_temporary_directory="" # For internal use
+test_suite_directory=""
+
+local -A parsed_arguments
+zparseopts -D -E -M -A parsed_arguments -- \
+  v -verbose=v \
+  -filter: \
+  -skip: \
+  -SSTest-temporary-directory: 
+
+if [[ $# -lt 1 ]]; then
+  view_error "Missing test suite directory."
+elif [[ $# -gt 2 ]]; then
+  view_error "Too many arguments."
+else
+  test_suite_directory="$1"
+fi
+
+if [[ -n "${parsed_arguments[(i)-v]}" || "${SST_VERBOSE_MODE:-}" =~ "^(on|true)$" ]]; then
+  verbose=true
+  export SST_VERBOSE_MODE="true"
+fi
+
+if [[ -n "${parsed_arguments[(i)--filter]}" ]]; then
+  filter="${parsed_arguments[--filter]}"
+fi
+
+if [[ -n "${parsed_arguments[(i)--skip]}" ]]; then
+  skip="${parsed_arguments[--skip]}"
+fi
+
+if [[ -n "${parsed_arguments[(i)--SSTest-temporary-directory]}" ]]; then
+  SSTest_temporary_directory="${parsed_arguments[--SSTest-temporary-directory]}"
+fi
+
+if [[ -z "$test_suite_directory" || ! -d "$test_suite_directory" ]]; then
+  view_error "No such directory: $test_suite_directory"
+fi 
+
+test_suite_directory=$(cd "$test_suite_directory" && pwd)
+
+function print_verbose() {
+  if [[ "$verbose" == "true" ]]; then
+    printf "\033[2m%s\033[m\n" "$1"
+  fi
+}
+
+print_verbose "Verbose mode: on"
+print_verbose "Test Suite directory: '${test_suite_directory}'"
+if [[ -n "$filter" ]]; then
+  print_verbose "Filter: ${filter}"
+fi
+if [[ -n "$skip" ]]; then
+  print_verbose "Skip: ${skip}"
+fi
+
+# Run tests!
+############
+
+function emphasized_print() {
+  printf "\033[1;4m%s\033[m\n" "$1"
+}
+
+function mildly_emphasized_print() {
+  printf "\033[1m%s\033[m\n" "$1"
+}
+
+set -e
+test_suite_name=$(basename "$test_suite_directory")
+
+lock_file="${test_suite_directory}/.SSTLockFile"
+if [[ -f "$lock_file" ]]; then
+  view_error "Another process may be running this test suite named \`${test_suite_name}\`.\nTry the following command if you believe that the test suite already finished.\n\n\trm \"$lock_file\"\n"
+fi
+touch "$lock_file"
+print_verbose "Lock file was created at '${lock_file}'"
+
+temporary_directory="$(dirname $(mktemp -u))/jp.YOCKOW.SSTRunTestSuite/$$"
+mkdir -p "$temporary_directory"
+print_verbose "Temporary directory was created at '${temporary_directory}'"
+
+temporary_directory_for_SSTest=""
+if [[ -n "$SSTest_temporary_directory" ]]; then
+  temporary_directory_for_SSTest="${SSTest_temporary_directory}/${test_suite_name}"
+  mkdir -p "$temporary_directory_for_SSTest"
+  print_verbose "Temporary directory for \`SSTest\` was created at '${temporary_directory_for_SSTest}'"
+fi
+
+function clean_up() {
+  rm "$lock_file"
+  print_verbose "Lock file was removed."
+  rm -rf "$temporary_directory"
+  print_verbose "Temporary directory was removed."
+}
+
+test_suite_start_time=$(SSTTime)
+emphasized_print "Test Suite '${test_suite_name}' started at $(SSTDate)" 1>&2
+
+## START
+
+test_suite_init_file="${test_suite_directory}/init"
+if [[ -f "$test_suite_init_file" ]]; then
+  print_verbose "Try to execute '$test_suite_init_file'"
+  chmod u+x "$test_suite_init_file"
+  "$test_suite_init_file"
+
+  if [[ $? -ne 0 ]]; then
+    clean_up
+    view_error "Initialization failed."
+  fi
+fi
+
+number_of_tests=0
+number_of_failures=0
+
+for test_file in "${test_suite_directory}"/test*; do
+  test_case_name=$(basename "$test_file")
+
+  if [[ -n "$filter" &&  ! "$test_case_name" =~ "$filter" ]]; then
+    print_verbose "Test Case '$test_case_name' was skipped due to the filter."
+    continue
+  fi
+  if [[ -n "$skip" &&  "$test_case_name" =~ "$skip" ]]; then
+    print_verbose "Test Case '$test_case_name' was skipped due to the skip condition."
+    continue
+  fi
+
+  # Prepare the file to that is read/written by `SSTFail`.
+  test_case_path_file="${temporary_directory}/current-test-case-path"
+  echo "$test_file" > "$test_case_path_file"
+  print_verbose "The path to the test case was written to '$test_case_path_file'"
+
+  test_case_failures_file="${temporary_directory}/$test_case_name"
+  touch "$test_case_failures_file"
+  print_verbose "Temporary file was created at '$test_case_failures_file'"
+
+  test_case_stderr_file="${temporary_directory}/$test_case_name.stderr"
+  touch "$test_case_stderr_file"
+  print_verbose "Temporary file was created at '$test_case_stderr_file'"
+  
+  test_case_failures_symlink="${temporary_directory}/current-test-case-failures"
+  ln -sf "$test_case_failures_file" "$test_case_failures_symlink"
+  print_verbose "Symbolic link to the temporary file was created at '$test_case_failures_symlink'"
+
+  # Preparetion for `SSTFail` end
+
+  mildly_emphasized_print "Test Case '-[${test_suite_name} ${test_case_name}]' started." 1>&2
+  test_case_start_time=$(SSTTime)
+
+  test_case_set_up_file="${test_suite_directory}/set-up"
+  if [[ -f "$test_case_set_up_file" ]]; then
+    print_verbose "Try to execute '$test_case_set_up_file'"
+    chmod u+x "$test_case_set_up_file"
+    "$test_case_set_up_file"
+
+    if [[ $? -ne 0 ]]; then
+      clean_up
+      view_error "Setup failed."
+    fi
+  fi
+
+  set +e
+
+  print_verbose "Try to execute '$test_file'"
+  successful=true
+  chmod u+x "$test_file"
+
+  exit_status_code=-1
+  { { "$test_file" 3>&2 2>&1 1>&3; } | tee "$test_case_stderr_file" } 3>&2 2>&1 1>&3
+  exit_status_code="${pipestatus[1]}"
+  print_verbose "Exit status code: $exit_status_code"
+
+  set -e
+
+  if [[ $exit_status_code -eq 0 && -s "$test_case_stderr_file" ]]; then
+    # Make sure that no errors have occurred as possible...
+    cat "$test_case_stderr_file" | while read line; do
+      splitted=(${(@s/:/)line})
+      if [[ ${#splitted[@]} -lt 3 ]]; then
+        continue
+      fi
+      if [[ "${splitted[1]}" == "$test_file" && "${splitted[2]}" =~ "^[0-9]+$" ]]; then
+        # TODO: Check "${splitted[3]}"
+        successful=false
+        break
+      fi
+    done
+  fi
+
+  if [[ $exit_status_code -ne 0 || -s "${temporary_directory}/$test_case_name" ]]; then
+    successful=false
+  fi
+
+  test_case_tear_down_file="${test_suite_directory}/tear-down"
+  if [[ -f "$test_case_tear_down_file" ]]; then
+    print_verbose "Try to execute '$test_case_tear_down_file'"
+    chmod u+x "$test_case_tear_down_file"
+    "$test_case_tear_down_file"
+
+    if [[ $? -ne 0 ]]; then
+      clean_up
+      view_error "Tearing-down failed."
+    fi
+  fi
+
+  elapsed_time=$(SSTTime --since $test_case_start_time | SSTFloorFraction ${SST_FRACTION_DIGITS:-6})
+  number_of_tests=$(( 1 + $number_of_tests ))
+  if [[ "$successful" == "true" ]]; then
+    mildly_emphasized_print "Test Case '-[${test_suite_name} ${test_case_name}]' passed (${elapsed_time} seconds)." 1>&2
+  else
+    mildly_emphasized_print "Test Case '-[${test_suite_name} ${test_case_name}]' failed (${elapsed_time} seconds)." 1>&2
+    number_of_failures=$(( 1 + $number_of_failures ))
+  fi
+done
+
+test_suite_finalize_file="${test_suite_directory}/finalize"
+if [[ -f "$test_suite_finalize_file" ]]; then
+  print_verbose "Try to execute '$test_suite_finalize_file'"
+  chmod u+x "$test_suite_finalize_file"
+  "$test_suite_finalize_file"
+
+  if [[ $? -ne 0 ]]; then
+    clean_up
+    view_error "Finalization failed."
+  fi
+fi
+
+clean_up
+
+elapsed_time=$(SSTTime --since $test_suite_start_time | SSTFloorFraction ${SST_FRACTION_DIGITS:-6})
+
+if [[ $number_of_failures -eq 0 ]]; then
+  emphasized_print "Test Suite '${test_suite_name}' passed at $(SSTDate)." 1>&2
+else
+  emphasized_print "Test Suite '${test_suite_name}' failed at $(SSTDate)." 1>&2
+fi
+
+printf "\033[3m\t Executed ${number_of_tests} tests, with ${number_of_failures} failures in ${elapsed_time} seconds.\033[m\n" 1>&2
+
+if [[ -n "$temporary_directory_for_SSTest" ]]; then
+  print_verbose "Write the number of tests/failures to temporary files."
+  echo "${number_of_tests}" > "${temporary_directory_for_SSTest}/n-tests"
+  echo "${number_of_failures}" > "${temporary_directory_for_SSTest}/n-failures"
+fi
+
+if [[ "$number_of_failures" -eq 0 ]]; then
+  exit 0
+else
+  exit 1
+fi

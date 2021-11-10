@@ -1,0 +1,10 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTest-version
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+echo "SSTest 1.0.0"
