@@ -9,18 +9,7 @@
 
 set -u
 
-# Make it possible to be found by `SSTFail`.
-command_path="$0"
-shell_name=$(basename "$(ps -o comm= -p $$)")
-if [[ "$shell_name" != "zsh" ]]; then
-  echo "Use \`zsh\` to execute this script." 1>&2
-  exit 1
-fi
-if [[ "${command_path:0:1}" != "/" ]]; then
-  exec "$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" "$@"
-fi
-
-command_name=$(basename "$command_path")
+command_name=$(basename "$0")
 
 function view_help() {
   echo "Overview: Run Test Suite."
@@ -58,15 +47,13 @@ function view_error() {
 verbose=false
 filter=""
 skip=""
-SSTest_temporary_directory="" # For internal use
 test_suite_directory=""
 
 local -A parsed_arguments
 zparseopts -D -E -M -A parsed_arguments -- \
   v -verbose=v \
   -filter: \
-  -skip: \
-  -SSTest-temporary-directory: 
+  -skip: 
 
 if [[ $# -lt 1 ]]; then
   view_error "Missing test suite directory."
@@ -114,6 +101,23 @@ if [[ -n "$skip" ]]; then
   print_verbose "Skip: ${skip}"
 fi
 
+temporary_directory="$(dirname $(mktemp -u))/jp.YOCKOW.SSTRunTestSuite/$$"
+mkdir -p "$temporary_directory"
+print_verbose "Temporary directory was created at '${temporary_directory}'"
+
+# Export variables
+##################
+if [[ -v SST_TEST_SUITE_RUNNER_PID ]]; then
+  view_error "Duplicate \`${command_name}\`(pid: ${SST_TEST_SUITE_RUNNER_PID}) exists."
+fi
+export SST_TEST_SUITE_RUNNER_PID=$$
+export SST_TEST_SUITE_RUNNER_TMP_DIR="$temporary_directory"
+export SST_TEST_SUITE_DIR="$test_suite_directory"
+## Variables that are set before running each case.
+export SST_CURRENT_TEST_CASE_FILE
+export SST_CURRENT_TEST_CASE_FAILURES_FILE
+
+
 # Run tests!
 ############
 
@@ -135,13 +139,9 @@ fi
 touch "$lock_file"
 print_verbose "Lock file was created at '${lock_file}'"
 
-temporary_directory="$(dirname $(mktemp -u))/jp.YOCKOW.SSTRunTestSuite/$$"
-mkdir -p "$temporary_directory"
-print_verbose "Temporary directory was created at '${temporary_directory}'"
-
 temporary_directory_for_SSTest=""
-if [[ -n "$SSTest_temporary_directory" ]]; then
-  temporary_directory_for_SSTest="${SSTest_temporary_directory}/${test_suite_name}"
+if [[ -n "${SST_TMP_DIR:-}" ]]; then
+  temporary_directory_for_SSTest="${SST_TMP_DIR}/${test_suite_name}"
   mkdir -p "$temporary_directory_for_SSTest"
   print_verbose "Temporary directory for \`SSTest\` was created at '${temporary_directory_for_SSTest}'"
 fi
@@ -185,24 +185,12 @@ for test_file in "${test_suite_directory}"/test*; do
     continue
   fi
 
-  # Prepare the file to that is read/written by `SSTFail`.
-  test_case_path_file="${temporary_directory}/current-test-case-path"
-  echo "$test_file" > "$test_case_path_file"
-  print_verbose "The path to the test case was written to '$test_case_path_file'"
-
-  test_case_failures_file="${temporary_directory}/$test_case_name"
-  touch "$test_case_failures_file"
-  print_verbose "Temporary file was created at '$test_case_failures_file'"
+  SST_CURRENT_TEST_CASE_FILE="$test_file"
+  SST_CURRENT_TEST_CASE_FAILURES_FILE="${temporary_directory}/$test_case_name"
 
   test_case_stderr_file="${temporary_directory}/$test_case_name.stderr"
   touch "$test_case_stderr_file"
   print_verbose "Temporary file was created at '$test_case_stderr_file'"
-  
-  test_case_failures_symlink="${temporary_directory}/current-test-case-failures"
-  ln -sf "$test_case_failures_file" "$test_case_failures_symlink"
-  print_verbose "Symbolic link to the temporary file was created at '$test_case_failures_symlink'"
-
-  # Preparetion for `SSTFail` end
 
   mildly_emphasized_print "Test Case '-[${test_suite_name} ${test_case_name}]' started." 1>&2
   test_case_start_time=$(SSTTime)
@@ -247,7 +235,7 @@ for test_file in "${test_suite_directory}"/test*; do
     done
   fi
 
-  if [[ $exit_status_code -ne 0 || -s "${temporary_directory}/$test_case_name" ]]; then
+  if [[ $exit_status_code -ne 0 || -s "$SST_CURRENT_TEST_CASE_FAILURES_FILE" ]]; then
     successful=false
   fi
 

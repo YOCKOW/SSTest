@@ -52,53 +52,17 @@ function print_verbose() {
   fi
 }
 
-function ppid_search() {
-  function runner_not_found() {
-    fatal_error "SSTest runner is not found. \`SSTFail\` or \`SSTAssert*\` must be called within test cases."
-  }
+if [[ ! -v SST_TEST_SUITE_RUNNER_PID ]]; then
+  fatal_error "PID for \`SSTRunTestSuite\` is not found. \`SSTFail\` or \`SSTAssert*\` must be called within test cases."
+fi
+print_verbose "Found PID of \`SSTRunTestSuite\` is ${SST_TEST_SUITE_RUNNER_ID}."
 
-  local pid=$(( 0 + $1 ))
-  local ppid_string=$(ps -o ppid= -p $pid)
-  local ppid=$(( 0 + ${ppid_string:-0} ))
-  if [[ -z "$ppid" || $ppid -le 1 ]]; then
-    print_verbose "Parent PID of $pid is not found or is the root process."
-    runner_not_found
-  fi
-
-  local process=$(ps -o command= -p $ppid)
-  if [[ -z "$process" ]]; then
-    runner_not_found
-  fi
-
-  if [[ "$process" =~ '^([[:alnum:][:blank:][:punct:]]+/)?zsh[[:blank:]]+(/.*/SSTRunTestSuite)[[:blank:]]' ]]; then
-    if [[ -f "${match[2]}" ]]; then
-      echo $ppid
-      return 0
-    fi
-  fi  
-
-  ppid_search $ppid
-}
-print_verbose "Search PID for \`SSTRunTestSuite\`."
-runner_pid=$(ppid_search $$)
-print_verbose "Found PID of \`SSTRunTestSuite\` is $runner_pid."
-
-temporary_directory="$(dirname $(mktemp -u))/jp.YOCKOW.SSTRunTestSuite/$runner_pid"
-current_test_case_failures_file="${temporary_directory}/current-test-case-failures"
-current_test_case_path_file="${temporary_directory}/current-test-case-path"
-
-if [[ ! -d "$temporary_directory" ]]; then
+if [[ ! -d "$SST_TEST_SUITE_RUNNER_TMP_DIR" ]]; then
   fatal_error "Temporary directory for the current runner is not found."
 fi
-if [[ ! -f "$current_test_case_failures_file" ]]; then
-  fatal_error "Log file for the current test case is not found."
-fi
-if [[ ! -f "$current_test_case_path_file" ]]; then
-  fatal_error "The path to the current test case is not found."
-fi
 
-test_case_path=$(cat "$current_test_case_path_file")
-if [[ -z "$test_case_path" ]]; then
+test_case_path="$SST_CURRENT_TEST_CASE_FILE"
+if [[ -z "$test_case_path" || ! -f "$test_case_path" ]]; then
   test_case_path="Unknown"
 fi
 
@@ -111,7 +75,7 @@ if [[ "$is_fatal_error" == "true" ]]; then
 else
   full_message="$full_message $(printf "\033[1;35mfailed\033[m: ${failure_message}")"
 fi
-echo "$full_message" >> "$current_test_case_failures_file"
+echo "$full_message" >>"$SST_CURRENT_TEST_CASE_FAILURES_FILE"
 printf "%s\n" "$full_message" 1>&2
 
 exit 1
