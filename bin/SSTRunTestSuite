@@ -76,10 +76,6 @@ if [[ -n "${parsed_arguments[(i)--skip]}" ]]; then
   skip="${parsed_arguments[--skip]}"
 fi
 
-if [[ -n "${parsed_arguments[(i)--SSTest-temporary-directory]}" ]]; then
-  SSTest_temporary_directory="${parsed_arguments[--SSTest-temporary-directory]}"
-fi
-
 if [[ -z "$test_suite_directory" || ! -d "$test_suite_directory" ]]; then
   view_error "No such directory: $test_suite_directory"
 fi 
@@ -139,18 +135,44 @@ fi
 touch "$lock_file"
 print_verbose "Lock file was created at '${lock_file}'"
 
-temporary_directory_for_SSTest=""
-if [[ -n "${SST_TMP_DIR:-}" ]]; then
-  temporary_directory_for_SSTest="${SST_TMP_DIR}/${test_suite_name}"
-  mkdir -p "$temporary_directory_for_SSTest"
-  print_verbose "Temporary directory for \`SSTest\` was created at '${temporary_directory_for_SSTest}'"
-fi
-
 function clean_up() {
   rm "$lock_file"
   print_verbose "Lock file was removed."
   rm -rf "$temporary_directory"
   print_verbose "Temporary directory was removed."
+}
+
+function strictly_exec() {
+  command_file="$1"
+  stderr_file=$(mktemp)
+
+  set +e
+
+  chmod u+x "$command_file"
+  print_verbose "Execute \"$command_file\""
+
+  exit_status_code=-1
+  { { "$command_file" 3>&2 2>&1 1>&3; } | tee "$stderr_file" } 3>&2 2>&1 1>&3
+  exit_status_code="${pipestatus[1]}"
+  print_verbose "Exit Status: $exit_status_code"
+
+  if [[ $exit_status_code -ne 0 ]]; then
+    return $exit_status_code
+  elif [[ -s "$stderr_file" ]]; then
+    # Make sure that no errors have occurred as possible...
+    cat "$stderr_file" | while read line; do
+      splitted=(${(@s/:/)line})
+      if [[ ${#splitted[@]} -lt 3 ]]; then
+        continue
+      fi
+      if [[ "${splitted[1]}" == "$command_file" && "${splitted[2]}" =~ "^[0-9]+$" ]]; then
+        # TODO: Check "${splitted[3]}"
+        return 1
+      fi
+    done
+  fi
+  
+  return 0
 }
 
 test_suite_start_time=$(SSTTime)
@@ -160,10 +182,7 @@ emphasized_print "Test Suite '${test_suite_name}' started at $(SSTDate)" 1>&2
 
 test_suite_init_file="${test_suite_directory}/init"
 if [[ -f "$test_suite_init_file" ]]; then
-  print_verbose "Try to execute '$test_suite_init_file'"
-  chmod u+x "$test_suite_init_file"
-  "$test_suite_init_file"
-
+  strictly_exec "$test_suite_init_file"
   if [[ $? -ne 0 ]]; then
     clean_up
     view_error "Initialization failed."
@@ -197,43 +216,17 @@ for test_file in "${test_suite_directory}"/test*; do
 
   test_case_set_up_file="${test_suite_directory}/set-up"
   if [[ -f "$test_case_set_up_file" ]]; then
-    print_verbose "Try to execute '$test_case_set_up_file'"
-    chmod u+x "$test_case_set_up_file"
-    "$test_case_set_up_file"
-
+    strictly_exec "$test_case_set_up_file"
     if [[ $? -ne 0 ]]; then
       clean_up
       view_error "Setup failed."
     fi
   fi
 
-  set +e
-
-  print_verbose "Try to execute '$test_file'"
+  # TEST CASE
   successful=true
-  chmod u+x "$test_file"
-
-  exit_status_code=-1
-  { { "$test_file" 3>&2 2>&1 1>&3; } | tee "$test_case_stderr_file" } 3>&2 2>&1 1>&3
-  exit_status_code="${pipestatus[1]}"
-  print_verbose "Exit status code: $exit_status_code"
-
-  set -e
-
-  if [[ $exit_status_code -eq 0 && -s "$test_case_stderr_file" ]]; then
-    # Make sure that no errors have occurred as possible...
-    cat "$test_case_stderr_file" | while read line; do
-      splitted=(${(@s/:/)line})
-      if [[ ${#splitted[@]} -lt 3 ]]; then
-        continue
-      fi
-      if [[ "${splitted[1]}" == "$test_file" && "${splitted[2]}" =~ "^[0-9]+$" ]]; then
-        # TODO: Check "${splitted[3]}"
-        successful=false
-        break
-      fi
-    done
-  fi
+  strictly_exec "$test_file"
+  exit_status_code=$?
 
   if [[ $exit_status_code -ne 0 || -s "$SST_CURRENT_TEST_CASE_FAILURES_FILE" ]]; then
     successful=false
@@ -241,10 +234,7 @@ for test_file in "${test_suite_directory}"/test*; do
 
   test_case_tear_down_file="${test_suite_directory}/tear-down"
   if [[ -f "$test_case_tear_down_file" ]]; then
-    print_verbose "Try to execute '$test_case_tear_down_file'"
-    chmod u+x "$test_case_tear_down_file"
-    "$test_case_tear_down_file"
-
+    strictly_exec "$test_case_tear_down_file"
     if [[ $? -ne 0 ]]; then
       clean_up
       view_error "Tearing-down failed."
@@ -263,10 +253,7 @@ done
 
 test_suite_finalize_file="${test_suite_directory}/finalize"
 if [[ -f "$test_suite_finalize_file" ]]; then
-  print_verbose "Try to execute '$test_suite_finalize_file'"
-  chmod u+x "$test_suite_finalize_file"
-  "$test_suite_finalize_file"
-
+  strictly_exec "$test_suite_finalize_file"
   if [[ $? -ne 0 ]]; then
     clean_up
     view_error "Finalization failed."
@@ -285,10 +272,10 @@ fi
 
 printf "\033[3m\t Executed ${number_of_tests} tests, with ${number_of_failures} failures in ${elapsed_time} seconds.\033[m\n" 1>&2
 
-if [[ -n "$temporary_directory_for_SSTest" ]]; then
+if [[ -v SST_NUMBER_OF_TESTS_FILE && -v SST_NUMBER_OF_FAILURES_FILE ]]; then
   print_verbose "Write the number of tests/failures to temporary files."
-  echo "${number_of_tests}" > "${temporary_directory_for_SSTest}/n-tests"
-  echo "${number_of_failures}" > "${temporary_directory_for_SSTest}/n-failures"
+  echo "${number_of_tests}" >"$SST_NUMBER_OF_TESTS_FILE"
+  echo "${number_of_failures}" >"$SST_NUMBER_OF_FAILURES_FILE"
 fi
 
 if [[ "$number_of_failures" -eq 0 ]]; then

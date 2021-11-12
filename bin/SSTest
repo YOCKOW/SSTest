@@ -135,6 +135,8 @@ print_verbose "The temporary directory was created at '$temporary_directory'."
 ##################
 export SST_TEST_SUITE_ROOT_DIR="$suites_containing_directory"
 export SST_TMP_DIR="$temporary_directory"
+export SST_NUMBER_OF_TESTS_FILE
+export SST_NUMBER_OF_FAILURES_FILE
 
 
 function emphasized_print() {
@@ -176,28 +178,44 @@ for suite_directory in "$suites_containing_directory"/*; do
   fi
   print_verbose "Options for \`SSTRunTestSuite\` is '$runner_options'."
 
+  mkdir -p "${temporary_directory}/${suite_name}"
+  SST_NUMBER_OF_TESTS_FILE="${temporary_directory}/${suite_name}/n-tests"
+  SST_NUMBER_OF_FAILURES_FILE="${temporary_directory}/${suite_name}/n-failures"
+
   set +e
   SSTRunTestSuite "$suite_directory" ${(Q)${(z)runner_options}}
   set -e
 
-  number_of_tests=$(( $number_of_tests + $(cat "${temporary_directory}/${suite_name}/n-tests") ))
-  number_of_failures=$(( $number_of_failures + $(cat "${temporary_directory}/${suite_name}/n-failures") ))
+  if [[ \
+    -v number_of_tests && -v number_of_failures && \
+    -s "$SST_NUMBER_OF_TESTS_FILE" && -s "$SST_NUMBER_OF_FAILURES_FILE"
+  ]]; then
+    number_of_tests=$(( $number_of_tests + $(cat "$SST_NUMBER_OF_TESTS_FILE") ))
+    number_of_failures=$(( $number_of_failures + $(cat "$SST_NUMBER_OF_FAILURES_FILE") ))
+  else
+    unset number_of_tests
+    unset number_of_failures
+  fi
 done
 
 elapsed_time=$(SSTTime --since $start_time | SSTFloorFraction ${SST_FRACTION_DIGITS:-6})
 
-if [[ $number_of_failures -eq 0 ]]; then
+if [[ -v number_of_failures &&  $number_of_failures -eq 0 ]]; then
   emphasized_print "Test Suite Sequence under \"${suites_containing_directory}\" passed at $(SSTDate)" 1>&2
 else
   emphasized_print "Test Suite Sequence under \"${suites_containing_directory}\" failed at $(SSTDate)" 1>&2
 fi
 
+if [[ ! -v number_of_tests || ! -v number_of_failures ]]; then
+  number_of_tests="n/a"
+  number_of_failures="n/a"
+fi
 printf "\033[3m\t Executed ${number_of_tests} tests, with ${number_of_failures} failures in ${elapsed_time} seconds.\033[m\n" 1>&2
 
 rm -rf "$temporary_directory"
 print_verbose "Temporary directory was removed."
 
-if [[ $number_of_failures -eq 0 ]]; then
+if [[ $number_of_failures != "n/a" && $number_of_failures -eq 0 ]]; then
   exit 0
 else
   exit 1
