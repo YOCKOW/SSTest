@@ -26,6 +26,9 @@ run-all-tests-verbosely: build
 run-failing-tests: build
 	env PATH="$(repository_dir)/bin:$$PATH" SSTest "$(repository_dir)/tests" --filter "/never-succeeds"
 
+test-v: build
+	env PATH="$(repository_dir)/bin:$$PATH" SSTest "$(repository_dir)/tests" --skip "Example/never-succeeds" -v
+
 test: build
 	env PATH="$(repository_dir)/bin:$$PATH" SSTest "$(repository_dir)/tests" --skip "Example/never-succeeds"
 
