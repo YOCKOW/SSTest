@@ -109,6 +109,7 @@ fi
 export SST_TEST_SUITE_RUNNER_PID=$$
 export SST_TEST_SUITE_RUNNER_TMP_DIR="$temporary_directory"
 export SST_TEST_SUITE_DIR="$test_suite_directory"
+export SST_ENV_VARIABLES_FILE="${temporary_directory}/env"
 ## Variables that are set before running each case.
 export SST_CURRENT_TEST_CASE_FILE
 export SST_CURRENT_TEST_CASE_FAILURES_FILE
@@ -175,6 +176,13 @@ function strictly_exec() {
   return 0
 }
 
+function export_variables() {
+  if [[ -s "$SST_ENV_VARIABLES_FILE" ]]; then
+    source "$SST_ENV_VARIABLES_FILE"
+    : >"$SST_ENV_VARIABLES_FILE" # Empty
+  fi
+}
+
 test_suite_start_time=$(SSTTime)
 emphasized_print "Test Suite '${test_suite_name}' started at $(SSTDate)" 1>&2
 
@@ -187,6 +195,7 @@ if [[ -f "$test_suite_init_file" ]]; then
     clean_up
     view_error "Initialization failed."
   fi
+  export_variables
 fi
 
 number_of_tests=0
@@ -221,6 +230,7 @@ for test_file in "${test_suite_directory}"/test*; do
       clean_up
       view_error "Setup failed."
     fi
+    export_variables
   fi
 
   # TEST CASE
@@ -231,6 +241,7 @@ for test_file in "${test_suite_directory}"/test*; do
   if [[ $exit_status_code -ne 0 || -s "$SST_CURRENT_TEST_CASE_FAILURES_FILE" ]]; then
     successful=false
   fi
+  export_variables
 
   test_case_tear_down_file="${test_suite_directory}/tear-down"
   if [[ -f "$test_case_tear_down_file" ]]; then
@@ -239,6 +250,7 @@ for test_file in "${test_suite_directory}"/test*; do
       clean_up
       view_error "Tearing-down failed."
     fi
+    export_variables
   fi
 
   elapsed_time=$(SSTTime --since $test_case_start_time | SSTFloorFraction ${SST_FRACTION_DIGITS:-6})

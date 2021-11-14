@@ -1,0 +1,10 @@
+#!/usr/bin/env zsh
+
+set -e
+
+if [[ -v SSTEST_TESTS_SETUP ]]; then
+  echo "\`tear-down\` may have failed."
+  exit 1
+fi
+
+SSTExport SSTEST_TESTS_SETUP "This is \`set-up\`."
