@@ -52,7 +52,7 @@ if [[ ! -v SST_ENV_VARIABLES_FILE ]]; then
 fi
 
 if [[ "$unset_mode" == "true" ]]; then
-  echo "unset $variable_name" >"$SST_ENV_VARIABLES_FILE"
+  echo "unset $variable_name" >>"$SST_ENV_VARIABLES_FILE"
 else
-  echo "export ${variable_name}=$(printf "%q" "$variable_value")" >"$SST_ENV_VARIABLES_FILE"
+  echo "export ${variable_name}=$(printf "%q" "$variable_value")" >>"$SST_ENV_VARIABLES_FILE"
 fi
