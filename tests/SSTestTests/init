@@ -3,3 +3,4 @@
 set -e
 
 SSTExport SSTEST_TESTS_INIT "This is \`init\`."
+SSTExport SSTEST_TESTS_INIT2 "This is \`init\` again."
