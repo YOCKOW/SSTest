@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+
+set -e
+
+SSTExport --unset SSTEST_TESTS_SETUP

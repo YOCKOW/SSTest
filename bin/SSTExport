@@ -1,0 +1,58 @@
+#!/usr/bin/env zsh
+
+################################################################################
+# SSTExport
+#   © 2021 YOCKOW.
+#     Licensed under MIT License.
+#     See "LICENSE.txt" for more information.
+################################################################################
+
+command_name=$(basename "$0")
+
+function fatal_error() {
+  printf "\033[1;31mfatal error\033[m: ${command_name}: %s\n" "$1" 1>&2
+  exit 1
+}
+
+if [[ ! -v SST_ENV_VARIABLES_FILE ]]; then
+  fatal_error "Temporary file for environment variables is not found."
+fi
+
+local variable_name=""
+local variable_value=""
+local unset_mode=false
+
+local -A parsed_arguments
+zparseopts -D -E -M -A parsed_arguments -- u -unset=u
+
+if [[ -n "${parsed_arguments[(i)-u]}" ]]; then
+  unset_mode=true
+fi
+
+if [[ $# -lt 1 ]]; then
+  fatal_error "Missing variable name"
+elif [[ $# -eq 1 ]]; then
+  if [[ "$unset_mode" != "true" ]]; then
+    fatal_error "Missing variable value"
+  fi
+  variable_name="$1"
+  unset variable_value
+elif [[ $# -eq 2 ]]; then
+  if [[ "$unset_mode" == "true" ]]; then
+    fatal_error "Unnecessary variable value"
+  fi
+  variable_name="$1"
+  variable_value="$2"
+else
+  fatal_error "Too many arguments"
+fi
+
+if [[ ! -v SST_ENV_VARIABLES_FILE ]]; then
+  fatal_error "Temporary file for environment variables is not specified. \`${command_name}\` must be called within \`init\`, \`set-up\`, or test cases"
+fi
+
+if [[ "$unset_mode" == "true" ]]; then
+  echo "unset $variable_name" >"$SST_ENV_VARIABLES_FILE"
+else
+  echo "export ${variable_name}=$(printf "%q" "$variable_value")" >"$SST_ENV_VARIABLES_FILE"
+fi

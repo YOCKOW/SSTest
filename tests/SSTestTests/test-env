@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+
+SSTAssertStringEqual "$SSTEST_TESTS_INIT" "This is \`init\`." -l ${(%):-%I}
+SSTAssertStringEqual "$SSTEST_TESTS_SETUP" "This is \`set-up\`."  -l ${(%):-%I}
+

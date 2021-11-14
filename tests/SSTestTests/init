@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+
+set -e
+
+SSTExport SSTEST_TESTS_INIT "This is \`init\`."
