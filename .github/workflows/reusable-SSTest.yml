@@ -1,0 +1,43 @@
+name: "Test with SSTest"
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: "Operating system to run the tests on"
+        required: true
+        type: string
+        default: "ubuntu-latest"
+      tests_dir:
+        description: "Directory containing the tests"
+        required: false
+        type: string
+        default: "tests"
+      filter:
+        description: "Filter for the tests to run"
+        required: false
+        type: string
+        default: ""
+jobs:
+  SSTest:
+    runs-on: ${{ inputs.os }}
+    steps:
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install zsh
+      - name: Install SSTest
+        run: |
+          git clone --depth 1 https://GitHub.com/YOCKOW/SSTest.git $HOME/SSTest
+          cd $HOME/SSTest
+          sudo make install
+          which SSTest
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Run Tests
+        run: |
+          if [ -n "${{ inputs.filter }}" ]; then
+            SSTest ./${{ inputs.tests_dir }} --filter "${{ inputs.filter }}"
+          else
+            SSTest ./${{ inputs.tests_dir }}
+          fi
