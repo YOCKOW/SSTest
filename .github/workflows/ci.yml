@@ -35,7 +35,14 @@ jobs:
       run: make test
     - name: Run Tests that will never succeed
       run: "! make run-failing-tests"
-    - name: Install SSTest
-      run: sudo make install
-    - name: Run Tests again
-      run: which SSTest && SSTest ./tests --filter SSTestTests/
+  test-with-SSTest:
+    needs: test
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+    uses: ./.github/workflows/reusable-SSTest.yml
+    with:
+      os: ${{ matrix.os }}
+      filter: "SSTestTests/"
