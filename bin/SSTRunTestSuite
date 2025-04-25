@@ -201,7 +201,7 @@ fi
 number_of_tests=0
 number_of_failures=0
 
-for test_file in "${test_suite_directory}"/test*; do
+for test_file in "${test_suite_directory}"/test*(N); do
   test_case_name=$(basename "$test_file")
 
   if [[ -n "$filter" &&  ! "$test_case_name" =~ "$filter" ]]; then
