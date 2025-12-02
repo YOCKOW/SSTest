@@ -60,7 +60,7 @@ jobs:
         run: |
           git clone --depth 1 https://GitHub.com/YOCKOW/SSTest.git $HOME/SSTest
           cd $HOME/SSTest
-          sudo make install
+          sudo -E make install
           which SSTest
       - name: Checkout Repository
         uses: actions/checkout@v6
