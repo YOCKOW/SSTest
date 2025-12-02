@@ -7,6 +7,21 @@ on:
         required: true
         type: string
         default: "ubuntu-latest"
+      node-version:
+        description: "Node version to be installed"
+        required: false
+        type: string
+        default: ""
+      python-version:
+        description: "Python version to be installed"
+        required: false
+        type: string
+        default: ""
+      swift-version:
+        description: "Swift version to be installed"
+        required: false
+        type: string
+        default: ""
       tests_dir:
         description: "Directory containing the tests"
         required: false
@@ -24,16 +39,31 @@ jobs:
       - name: Install zsh
         if: runner.os == 'Linux'
         run: |
-          sudo apt update
-          sudo apt install zsh
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends zsh
+      - name: Install Node.js
+        if: ${{ inputs.node-version != '' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: Install Python
+        if: ${{ inputs.python-version != '' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install Swift
+        if: ${{ inputs.swift-version != '' }}
+        uses: YOCKOW/Action-setup-swift@v1
+        with:
+          swift-version: ${{ inputs.swift-version }}
       - name: Install SSTest
         run: |
           git clone --depth 1 https://GitHub.com/YOCKOW/SSTest.git $HOME/SSTest
           cd $HOME/SSTest
-          sudo make install
+          sudo -E make install
           which SSTest
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Run Tests
         run: |
           if [ -n "${{ inputs.filter }}" ]; then
